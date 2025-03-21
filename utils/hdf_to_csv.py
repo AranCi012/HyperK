@@ -3,6 +3,9 @@ import os
 import h5py
 from dataclasses import dataclass
 import plotly.express as px
+import glob
+from tqdm import tqdm
+
 
 
 @dataclass
@@ -168,42 +171,42 @@ def export_pmt_hit_track_data_by_event(reader: HKPandasReader, output_dir: str =
             out_file = os.path.join(output_dir, f"event_nevt{nevt}_run{run}.csv")
             out_df.to_csv(out_file, index=False)
             print(f"[✓] Salvato: {out_file}")
-            input()
+            
 
         except Exception as e:
             print(f"[!] Errore nell'evento (nevt={nevt}, run={run}): {e}")
 
 
-
-
-def main():
-
-    hdf_file = "HyperK/Hyperk/shared/100k_ranvtx_ranmom_0_1000_pandas/out.ext.pandas.0"  
-
+def scan_hdf5_structure(hdf_file):
+    print(f"\n📂 Struttura del file HDF5: {hdf_file}")
     with h5py.File(hdf_file, "r") as f:
         def print_hdf_structure(name, obj):
             print(f"{name}: {obj}")
-
-        print("\n📂 Struttura del file HDF5:")
         f.visititems(print_hdf_structure)
 
-    with h5py.File(hdf_file, "r") as f:
-        def print_dataset_columns(key):
-            group = f[key]
-            if "block0_items" in group:
-                column_names = [c.decode() for c in group["block0_items"][:]]
-                print(f"📂 Dataset: {key} → Colonne: {column_names}")
-
-        print("\n📊 Colonne disponibili nei dataset:")
-
-        for dataset_name in f.keys():
-            print_dataset_columns(dataset_name)
-
-    reader = HKPandasReader("HyperK/Hyperk/shared/100k_ranvtx_ranmom_0_1000_pandas/out.ext.pandas.0")
-    export_pmt_hit_track_data_by_event(reader, output_dir="csv_events")
-   
-
+def process_all_hdf_files(folder_path, output_root="csv_events", show_structure=False):
+    hdf_files = sorted(glob.glob(os.path.join(folder_path, "*.pandas.*")))
     
+    print(f"\n🔍 Trovati {len(hdf_files)} file HDF5 nella cartella `{folder_path}`")
+
+    for idx, hdf_file in enumerate(tqdm(hdf_files, desc="🔁 Elaborazione file HDF")):
+        print(f"\n➡️  Processing file {idx + 1}/{len(hdf_files)}: {hdf_file}")
+
+        if show_structure:
+            scan_hdf5_structure(hdf_file)
+
+        try:
+            reader = HKPandasReader(hdf_file)
+            sub_output_dir = os.path.join(output_root, f"file_{idx}")
+            export_pmt_hit_track_data_by_event(reader, output_dir=sub_output_dir)
+        except Exception as e:
+            print(f"[!] Errore nel file `{hdf_file}`: {e}")
+
+def main():
+    input_folder = "DatiHK/100k_ranvtx_ranmom_0_1000_pandas"
+    process_all_hdf_files(input_folder, output_root="csv_events", show_structure=False)
+   
+   
 if __name__ == '__main__':
 
     main()
